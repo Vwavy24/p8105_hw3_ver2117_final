@@ -1,0 +1,188 @@
+---
+title: "p8105_hw3_ver2117"
+author: "Varvy Rousseau"
+date: "2022-10-12"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Loading necessary packages
+```{r}
+library(tidyverse)
+library(knitr)
+library(patchwork)
+library(ggridges)
+
+  opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+	fig.width = 8, 
+  fig.height = 6,
+  out.width = "90%")
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis")
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+
+#Problem 2
+#Loading,tidying, and wrangling the accel data 
+```{r}
+accel_df = read.csv("accel_data.csv") %>%
+  janitor::clean_names() %>%
+  pivot_longer(
+  activity_1:activity_1440,
+  names_to = "minutes",
+  names_prefix = "activity_",
+  values_to = "activity_counts") %>% 
+  mutate(
+    minutes = as.numeric(minutes),
+    day = factor(day),
+    day = factor(day, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")),
+    weeknd_vs_weekday = as.numeric(day %in% c("Saturday", "Sunday")),
+    weeknd_vs_weekday = recode(weeknd_vs_weekday, '1'="Weekend", '0'="Weekday"))
+
+head(accel_df)
+
+nrow(accel_df)
+ncol(accel_df)
+```         
+
+#Describe the variables, how many observations???, etc..
+The accelerometer dataset is composed of 63 year-old males with a BMI of 25 that were admitted to the Advanced Cardiac Care Center of Columbia University Medical center and diagnosed with congestive heart failure (CHF).
+
+The number of observations(50400) in tidied dataset is `r nrow(accel_df)`. The variables in this dataset include week, day, minutes, activity counts, and an added variables weekend versus weekday variable. 
+
+
+# Create a table showing these totals
+#Aggregate across mins for each day & table
+```{r}
+total_act = accel_df %>% 
+ janitor::clean_names() %>%
+ group_by(day, week)%>%
+ summarize(total_sum = sum(activity_counts))%>%
+  pivot_wider(
+    names_from = "day",
+    values_from = "total_sum")
+
+total_act
+  
+```
+#Look at the trends
+When looking at the table, the activity totals for weeks 1, 2, and 5 all of the activity totals increase from Monday to Friday and Monday to Saturday for week 2.  For the other weeks the activity totals decrease from Monday to Friday. For weeks 4 and 5 the total for Saturday is 1440.
+
+
+#Single Panel Plot 
+```{r}
+ggplot(accel_df, aes(x = minutes, y = activity_counts)) +
+         geom_point(aes(color = day)) +
+  labs(title = "24- Hour Activity Time Courses For Each Day ") +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+  
+```
+# Describe any patterns that I see
+Overall the graph is a bit messy but you can see that Sunday, Saturday, Thursday and Tuesday have some high activity counts. 
+
+#Problem 3
+#Loading the Data & relevant packages
+```{r}
+library(p8105.datasets)
+
+data("ny_noaa") 
+
+```
+
+#Cleaning the data
+```{r}
+ny_noaa_t = 
+  ny_noaa %>%
+  separate(date, into = c("Year", "Month", "Day"), convert = TRUE) %>%
+  mutate(
+    tmax = as.numeric(tmax),
+    tmin = as.numeric(tmin),
+    tmax = tmax / 10, 
+    tmin = tmin / 10,
+    prcp = prcp / 10)
+
+# Getting a mode of snow
+
+ny_snowfall = 
+  ny_noaa_t %>%
+  count(snow) %>%
+  arrange(desc(n))
+
+```
+
+For snowfall the most commonly observed value is 0 which would mean that it was probably not snowing for those days. 
+
+
+#Making the two panel plot showing the average max temperature in January and July in each station across years
+#Plot for January & July
+```{r}
+ny_noaa_t %>%
+  group_by(Month, Year, id) %>%
+  filter(
+    Month %in% c("1", "7")) %>%
+      summarise(
+        tmax_mean = mean(tmax, na.rm = TRUE)) %>%
+      ggplot(aes(x = Year, y = tmax_mean, group = id)) +
+      labs(
+        x = "Year",
+        y = "Mean of Max Temperature",
+        title = "Average Max Temperature Versus Year in January and July") +
+      geom_line(alpha = 0.5, color = "blue") + facet_grid(~ Month) 
+
+t_max_out = 
+  ny_noaa_t %>%
+  group_by(Month, Year, id) %>%
+  filter(
+    Month %in% c("1", "7")) %>%
+      summarise(
+        tmax_mean = mean(tmax, na.rm = TRUE)) 
+
+summary(pull(t_max_out, tmax_mean))
+```
+
+Yes you can see the average maximum temperature is higher in July than in January.  Yes there are some outliers. In the January graph has an outlier of -13.439 and on the July graph there is an outlier of 33.600
+
+
+
+#Making tmax vs tmin for the full dataset (note that a scatterplot may not be the best option); and (ii) make a plot showing the distribution of snowfall values greater than 0 and less than 100 separately by year.
+
+```{r}
+yr_plot = 
+  ny_noaa_t %>%
+      ggplot(aes(x = tmin, y = tmax)) +
+      geom_hex()
+      labs(
+        x = "Tmin",
+        y = "Tmax",
+        title = "Tmin Versus Tmax for NY_NOAA Dataset") +
+        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+      
+yr_plot
+      
+sno_fall = 
+  ny_noaa_t %>%
+  filter(snow > 0 & snow < 100) %>%
+  ggplot(aes(x = Year, y = factor(snow))) +
+  geom_density_ridges(scale = 3, rel_min_height = 0.01) +
+  scale_fill_viridis_c(name = "Snowfall", option = "A")
+  labs(
+    x = "Year",
+    y = "Snowfall",
+    title = "Snowfall")
+
+sno_fall
+yr_plot / sno_fall
+```
+
